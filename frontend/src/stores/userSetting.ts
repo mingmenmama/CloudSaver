@@ -1,55 +1,46 @@
-import { defineStore } from "pinia";
-import type {
-  UserSettingStore,
-  GlobalSettingAttributes,
-  UserSettingAttributes,
-} from "@/types/user";
-import { settingApi } from "@/api/setting";
-import { ElMessage } from "element-plus";
+import { defineStore } from 'pinia'
+import { login as loginApi, getUserInfo } from '@/api/auth'
 
-export const useUserSettingStore = defineStore("user", {
-  state: (): UserSettingStore => ({
-    globalSetting: null,
-    userSettings: {
-      cloud115Cookie: "",
-      quarkCookie: "",
-    },
-    displayStyle: (localStorage.getItem("display_style") as "table" | "card") || "card",
-    imagesSource: (localStorage.getItem("images_source") as "proxy" | "local") || "proxy",
+export const useUserStore = defineStore('user', {
+  state: () => ({
+    token: localStorage.getItem('token') || '',
+    userInfo: null
   }),
 
-  actions: {
-    async getSettings() {
-      const { data } = await settingApi.getSetting();
-      if (data) {
-        this.globalSetting = data.globalSetting;
-        this.userSettings = data.userSettings;
-      }
-    },
-
-    async saveSettings(settings: {
-      globalSetting?: GlobalSettingAttributes | null;
-      userSettings: UserSettingAttributes;
-    }) {
-      try {
-        await settingApi.saveSetting(settings);
-        await this.getSettings();
-      } catch (error) {
-        console.log(error);
-        throw error;
-      }
-    },
-
-    setDisplayStyle(style: "table" | "card") {
-      this.displayStyle = style;
-      localStorage.setItem("display_style", style);
-      ElMessage.success(`切换成功，当前为${style === "table" ? "列表" : "卡片"}模式`);
-    },
-
-    setImagesSource(source: "proxy" | "local") {
-      this.imagesSource = source;
-      localStorage.setItem("images_source", source);
-      ElMessage.success(`切换成功，图片模式当前为${source === "proxy" ? "代理" : "直连"}模式`);
-    },
+  getters: {
+    isLoggedIn: (state) => !!state.token,
+    isAdmin: (state) => state.userInfo?.role === 'admin',
+    canModifySettings: (state) => state.userInfo?.role === 'admin'
   },
-});
+
+  actions: {
+    async login(loginForm) {
+      try {
+        const response = await loginApi(loginForm)
+        this.token = response.token
+        this.userInfo = response.user
+        localStorage.setItem('token', response.token)
+        return response
+      } catch (error) {
+        throw error
+      }
+    },
+
+    async getUserInfo() {
+      try {
+        const response = await getUserInfo()
+        this.userInfo = response
+        return response
+      } catch (error) {
+        this.logout()
+        throw error
+      }
+    },
+
+    logout() {
+      this.token = ''
+      this.userInfo = null
+      localStorage.removeItem('token')
+    }
+  }
+})
